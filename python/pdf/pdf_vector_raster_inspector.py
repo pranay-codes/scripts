@@ -100,22 +100,31 @@ def collect_vector_kinds_from_drawings(drawings: List[Dict[str, Any]]) -> Set[st
     Inspect drawing items returned by page.get_drawings() and infer whether
     we saw simple 'lines' and/or more complex 'paths'.
     """
-    kinds: Set[str] = set()
+
+    OPERATOR_MAP = {
+        "l": "line",
+        "c": "curve",
+        "re": "rect",
+        "m": "moveto",
+        "h": "closepath",
+        "q": "save_state",
+        "Q": "restore_state",
+        "qu": "quad"
+    }
+    
+    kinds = set()
     for d in drawings:
         for item in d.get("items", []):
             # Ensure item is a dictionary before accessing its properties
+            print("item:", item)
             if isinstance(item, dict):
                 t = item.get("type", "").lower()
-                if t in {"line", "rect", "polyline", "quad"}:
-                    kinds.add("lines")
-                elif t in {"curve", "bezier", "path"}:
-                    kinds.add("paths")
-                # Unknown types: conservatively treat as paths (more complex geometry)
-                elif t:
-                    kinds.add("paths")
+                kinds.add(t)
             elif isinstance(item, tuple):
                 # Handle tuple case (log or process as needed)
-                kinds.add("paths")  # Default to "paths" for unknown tuple structures
+                op = str(item[0]).lower()
+                obj_type = OPERATOR_MAP.get(op, op)  # default to op if not mapped
+                kinds.add(obj_type)
     return kinds
 
 
@@ -141,13 +150,10 @@ def analyze_pdf(pdf_path: str) -> List[Dict[str, Any]]:
         drawings = page.get_drawings()
         vector_kinds = collect_vector_kinds_from_drawings(drawings)
 
-        vector_objects: List[str] = []
+        vector_objects = []
         if has_text:
             vector_objects.append("text")
-        if "lines" in vector_kinds:
-            vector_objects.append("lines")
-        if "paths" in vector_kinds:
-            vector_objects.append("paths")
+        vector_objects.extend(sorted(vector_kinds))
 
         page_result = {
             "page": i,
